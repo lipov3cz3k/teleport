@@ -23,7 +23,7 @@ packages = [
 "Changelog" = "https://github.com/alexanderhenne/teleport/blob/main/CHANGELOG.md"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.9"
 aiortc-datachannel-only = "^1.3.2.post3"
 cryptography = "<39"
 requests = "^2.28.2"
