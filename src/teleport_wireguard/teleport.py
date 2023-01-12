@@ -3,6 +3,7 @@ import logging
 import socket
 import subprocess  # nosec
 import uuid
+from typing import Union
 
 import requests
 from aiortc import (
@@ -25,7 +26,7 @@ SIGNALING_URL = "https://client.amplifi.com/api/deviceToken/mlClientConnect"
 DEVICE_PLATFORM = "iOS"
 
 
-def _generate_wg_keys():
+def _generate_wg_keys() -> tuple[str, str]:
     privateKey = subprocess.check_output(  # nosec
         ["wg", "genkey"], encoding="utf8"
     ).strip()
@@ -39,18 +40,18 @@ def _generate_wg_keys():
     return privateKey, publicKey
 
 
-def _get_device_name():
+def _get_device_name() -> str:
     return socket.gethostname()
 
 
-def _make_request_headers(token):
+def _make_request_headers(token: str) -> dict[str, str]:
     return {
         "x-devicetoken": token,
         "user-agent": "AmpliFiTeleport/7 CFNetwork/1220.1 Darwin/20.3.0",
     }
 
 
-def _add_tunnel_info(sdp, friendlyName, platform, publicKey):
+def _add_tunnel_info(sdp: str, friendlyName: str, platform: str, publicKey: str) -> str:
     parts = sdp.partition("s=-")
     info = "\r\n".join(
         [
@@ -64,7 +65,7 @@ def _add_tunnel_info(sdp, friendlyName, platform, publicKey):
     return parts[0] + parts[1] + "\r\n" + info + parts[2]
 
 
-def _get_remote_description(localDescription, deviceToken):
+def _get_remote_description(localDescription: str, deviceToken: str) -> str:
     headers = _make_request_headers(deviceToken)
 
     iceConfigResponse = requests.post(ICE_CONFIG_URL, headers=headers)
@@ -93,7 +94,11 @@ def _get_remote_description(localDescription, deviceToken):
     return RTCSessionDescription(sdp=response["answer"], type="answer")
 
 
-def _generate_wg_config(pc, remoteDescription, privateKey):
+def _generate_wg_config(
+    pc: RTCPeerConnection,
+    remoteDescription: RTCSessionDescription,
+    privateKey: str,
+) -> str:
     iceTransport = pc.sctp.transport.transport
     iceGatherer = iceTransport.iceGatherer
     connection = iceGatherer._connection
@@ -135,7 +140,7 @@ def _generate_wg_config(pc, remoteDescription, privateKey):
     return "\n".join(wgConfigLines)
 
 
-async def _connect_device_peer(pc, deviceToken):
+async def _connect_device_peer(pc: RTCPeerConnection, deviceToken: str) -> None:
     # A media channel or data channel is required
     # to create an offer, but it will not be used.
     pc.createDataChannel("chat")
@@ -159,7 +164,7 @@ async def _connect_device_peer(pc, deviceToken):
         configFuture = loop.create_future()
 
         @pc.on("iceconnectionstatechange")
-        async def on_iceconnectionstatechange():
+        async def on_iceconnectionstatechange() -> None:
             logging.debug("ICE connection state is %s", pc.iceConnectionState)
 
             if pc.iceConnectionState == "completed":
@@ -182,7 +187,7 @@ async def _connect_device_peer(pc, deviceToken):
         await pc.close()
 
 
-def generate_client_hint():
+def generate_client_hint() -> str:
     return str(uuid.uuid4()).upper()
 
 
@@ -200,7 +205,7 @@ def get_device_token(clientHint: str, pin: str) -> str:
     raise Exception("Client access request failed (%s)" % response.get("error", "-"))
 
 
-def connect_device(deviceToken):
+def connect_device(deviceToken: str) -> Union[str, None]:
     stun = RTCIceServer(urls=ICE_STUN_SERVER)
     config = RTCConfiguration([stun])
     pc = RTCPeerConnection(config)
@@ -208,9 +213,11 @@ def connect_device(deviceToken):
     coro = _connect_device_peer(pc, deviceToken)
 
     loop = asyncio.get_event_loop()
+    result = None
     try:
-        return loop.run_until_complete(coro)
+        result = loop.run_until_complete(coro)
     except KeyboardInterrupt:
         pass
     finally:
         loop.run_until_complete(pc.close())
+    return result
