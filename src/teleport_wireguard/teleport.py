@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import socket
-import subprocess
+import subprocess  # nosec
 import uuid
 
 import requests
@@ -16,7 +16,7 @@ from aiortc.sdp import grouplines, parse_attr
 ICE_STUN_SERVER = "stun:global.stun.twilio.com:3478"
 
 REQUEST_DEVICE_TOKEN_URL = (
-    "https://client.amplifi.com/api/deviceToken/mlRequestClientAccess"
+    "https://client.amplifi.com/api/deviceToken/mlRequestClientAccess"  # nosec
 )
 ICE_CONFIG_URL = "https://client.amplifi.com/api/deviceToken/mlIceConfig"
 SIGNALING_URL = "https://client.amplifi.com/api/deviceToken/mlClientConnect"
@@ -26,9 +26,11 @@ DEVICE_PLATFORM = "iOS"
 
 
 def _generate_wg_keys():
-    privateKey = subprocess.check_output(["wg", "genkey"], encoding="utf8").strip()
+    privateKey = subprocess.check_output(  # nosec
+        ["wg", "genkey"], encoding="utf8"
+    ).strip()
 
-    publicKeyProcess = subprocess.Popen(
+    publicKeyProcess = subprocess.Popen(  # nosec
         ["wg", "pubkey"],
         stdout=subprocess.PIPE,
         stdin=subprocess.PIPE,
@@ -149,7 +151,7 @@ def _generate_wg_config(pc, remoteDescription, privateKey):
         "[Peer]",
         "PublicKey = %s" % remotePublicKey,
         "AllowedIPs = 0.0.0.0/0, ::/0",  # Block untunneled traffic (kill-switch)
-        "Endpoint = %s:%s" % (remoteIp, remotePort),
+        f"Endpoint = {remoteIp}:{remotePort}",
     ]
 
     return "\n".join(wgConfigLines)

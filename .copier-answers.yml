@@ -1,0 +1,20 @@
+# Changes here will be overwritten by Copier
+_commit: d338612
+_src_path: gh:browniebroke/pypackage-template
+add_me_as_contributor: false
+copyright_year: '2023'
+documentation: true
+email: alexander@henne.nu
+full_name: Alexander Henne
+github_username: 'alexanderhenne'
+initial_commit: false
+open_source_license: MIT
+package_name: teleport_wireguard
+project_name: Teleport WireGuard
+project_short_description: Unofficial tool which generates WireGuard VPN configurations
+    for AmpliFi Teleport.
+project_slug: teleport-wireguard
+run_poetry_install: false
+setup_github: false
+setup_pre_commit: false
+
