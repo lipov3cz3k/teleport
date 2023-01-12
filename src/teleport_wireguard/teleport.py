@@ -29,16 +29,13 @@ def _generate_wg_keys():
     privateKey = subprocess.check_output(  # nosec
         ["wg", "genkey"], encoding="utf8"
     ).strip()
-
     publicKeyProcess = subprocess.Popen(  # nosec
         ["wg", "pubkey"],
         stdout=subprocess.PIPE,
         stdin=subprocess.PIPE,
         encoding="utf8",
     )
-
     publicKey = publicKeyProcess.communicate(input=privateKey)[0].strip()
-
     return privateKey, publicKey
 
 
@@ -57,11 +54,11 @@ def _add_tunnel_info(sdp, friendlyName, platform, publicKey):
     parts = sdp.partition("s=-")
     info = "\r\n".join(
         [
-            f"a=tool:ubnt_webrtc version ",
-            f"a=uca_acf5_amplifi_friendly_name:" + friendlyName,
-            f"a=uca_acf5_amplifi_nomination_mode:slave",
-            f"a=uca_acf5_amplifi_platform:" + platform,
-            f"a=uca_acf5_amplifi_tunnel_pub_key:" + publicKey,
+            "a=tool:ubnt_webrtc version ",
+            f"a=uca_acf5_amplifi_friendly_name:{friendlyName}",
+            "a=uca_acf5_amplifi_nomination_mode:slave",
+            f"a=uca_acf5_amplifi_platform:{platform}",
+            f"a=uca_acf5_amplifi_tunnel_pub_key:{publicKey}",
         ]
     )
     return parts[0] + parts[1] + "\r\n" + info + parts[2]
@@ -71,16 +68,11 @@ def _get_remote_description(localDescription, deviceToken):
     headers = _make_request_headers(deviceToken)
 
     iceConfigResponse = requests.post(ICE_CONFIG_URL, headers=headers)
-
-    logging.debug("Raw ICE config response: %s" % iceConfigResponse.text)
+    logging.debug("Raw ICE config response: %s", iceConfigResponse.text)
 
     iceConfig = iceConfigResponse.json()
-
     if not iceConfig["success"]:
-        if iceConfig["error"]:
-            raise Exception("ICE config request failed (%s)" % iceConfig["error"])
-        else:
-            raise Exception("ICE config request failed")
+        raise Exception("ICE config request failed (%s)" % iceConfig.get("error", "-"))
 
     iceServers = iceConfig["servers"]
 
@@ -92,45 +84,31 @@ def _get_remote_description(localDescription, deviceToken):
         },
         headers=headers,
     )
+    logging.debug("Raw connect response: %s", connectResponse.text)
 
-    logging.debug("Raw connect response: %s" % connectResponse.text)
+    response = connectResponse.json()
+    if not response["success"]:
+        raise Exception("Connect request failed (%s)" % response.get("error", "-"))
 
-    answerAndSuccess = connectResponse.json()
-
-    if not answerAndSuccess["success"]:
-        if answerAndSuccess["error"]:
-            raise Exception("Connect request failed (%s)" % answerAndSuccess["error"])
-        else:
-            raise Exception("Connect request failed")
-
-    answer = answerAndSuccess["answer"]
-    return RTCSessionDescription(sdp=answer, type="answer")
+    return RTCSessionDescription(sdp=response["answer"], type="answer")
 
 
 def _generate_wg_config(pc, remoteDescription, privateKey):
     iceTransport = pc.sctp.transport.transport
     iceGatherer = iceTransport.iceGatherer
     connection = iceGatherer._connection
-
-    logging.debug("Nominated peers: %s" % connection._nominated)
+    logging.debug("Nominated peers: %s", connection._nominated)
 
     if 1 not in connection._nominated:
         raise Exception("No nominated candidate peer")
 
     candidatePair = connection._nominated[1]
+    logging.debug("Chosen candidate pair: %s", candidatePair)
 
-    logging.debug("Chosen candidate pair: %s" % candidatePair)
+    _, localPort = candidatePair.local_addr
+    remoteIp, remotePort = candidatePair.remote_addr
 
-    localAddr = candidatePair.local_addr
-    localPort = localAddr[1]
-
-    remoteAddr = candidatePair.remote_addr
-    remoteIp = remoteAddr[0]
-    remotePort = remoteAddr[1]
-
-    remoteSdp = remoteDescription.sdp
-    session, _ = grouplines(remoteSdp)
-
+    session, _ = grouplines(remoteDescription.sdp)
     for line in session:
         if line.startswith("a="):
             attr, value = parse_attr(line)
@@ -143,13 +121,13 @@ def _generate_wg_config(pc, remoteDescription, privateKey):
 
     wgConfigLines = [
         "[Interface]",
-        "PrivateKey = %s" % privateKey,
-        "ListenPort = %s" % localPort,
-        "Address = %s/32" % interfaceAddress,
-        "DNS = %s" % dnsAddress,
+        f"PrivateKey = {privateKey}",
+        f"ListenPort = {localPort}",
+        f"Address = {interfaceAddress}/32",
+        f"DNS = {dnsAddress}",
         "",
         "[Peer]",
-        "PublicKey = %s" % remotePublicKey,
+        f"PublicKey = {remotePublicKey}",
         "AllowedIPs = 0.0.0.0/0, ::/0",  # Block untunneled traffic (kill-switch)
         f"Endpoint = {remoteIp}:{remotePort}",
     ]
@@ -171,20 +149,18 @@ async def _connect_device_peer(pc, deviceToken):
     localDescription = _add_tunnel_info(
         pc.localDescription.sdp, deviceName, platform, publicKey
     )
-
-    logging.debug("Sending local description: %s" % localDescription)
+    logging.debug("Sending local description: %s", localDescription)
 
     try:
         remoteDescription = _get_remote_description(localDescription, deviceToken)
-
-        logging.debug("Received remote description: %s" % remoteDescription)
+        logging.debug("Received remote description: %s", remoteDescription)
 
         loop = asyncio.get_event_loop()
         configFuture = loop.create_future()
 
         @pc.on("iceconnectionstatechange")
         async def on_iceconnectionstatechange():
-            logging.debug("ICE connection state is %s" % pc.iceConnectionState)
+            logging.debug("ICE connection state is %s", pc.iceConnectionState)
 
             if pc.iceConnectionState == "completed":
                 try:
@@ -210,26 +186,18 @@ def generate_client_hint():
     return str(uuid.uuid4()).upper()
 
 
-def get_device_token(clientHint, pin):
+def get_device_token(clientHint: str, pin: str) -> str:
     clientAccessResponse = requests.post(
         REQUEST_DEVICE_TOKEN_URL,
         json={"client_hint": clientHint},
         headers=_make_request_headers(pin),
     )
+    logging.debug("Raw client access response: %s", clientAccessResponse.text)
 
-    logging.debug("Raw client access response: %s" % clientAccessResponse.text)
-
-    deviceTokenAndSuccess = clientAccessResponse.json()
-
-    if not deviceTokenAndSuccess["success"]:
-        if deviceTokenAndSuccess["error"]:
-            raise Exception(
-                "Client access request failed (%s)" % deviceTokenAndSuccess["error"]
-            )
-        else:
-            raise Exception("Client access request failed")
-
-    return deviceTokenAndSuccess["client_id"]
+    response = clientAccessResponse.json()
+    if response.get("success"):
+        return response["client_id"]
+    raise Exception("Client access request failed (%s)" % response.get("error", "-"))
 
 
 def connect_device(deviceToken):

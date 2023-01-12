@@ -49,7 +49,11 @@ else:
         with open(args.uuid_file, mode="w") as f:
             clientHint = generate_client_hint()
             f.write(clientHint)
-    deviceToken = get_device_token(clientHint, args.pin)
+    try:
+        deviceToken = get_device_token(clientHint, args.pin)
+    except Exception as e:
+        logging.error(e)
+        exit(1)
     with open(args.token_file, mode="w") as f:
         f.write(deviceToken)
 
@@ -57,3 +61,4 @@ try:
     print(connect_device(deviceToken))
 except Exception as e:
     logging.error(e)
+    exit(1)
