@@ -45,6 +45,16 @@ Install this via pip (or your favourite package manager):
 3.  Paste the outputted WireGuard config into a WireGuard client and connect.
 4.  Repeat steps 3 and 4 every time you want to connect, but without the `--pin` argument.
 
+## How to build/debug
+
+```
+(poetry env use 'C:\Program Files\Python39\python.exe')
+poetry install
+poetry run python -m teleport_wireguard --help
+# build exe
+poetry run python -m PyInstaller --clean  -F --console --collect-all charset_normalizer --additional-hooks-dir pyinstaller/hooks  -n teleport .\src\teleport_wireguard\__main__.py
+```
+
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
